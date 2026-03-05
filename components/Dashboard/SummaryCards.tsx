@@ -1,0 +1,70 @@
+'use client';
+
+import { useAppContext } from '@/context/AppContext';
+import { formatCurrency } from '@/lib/utils';
+import { CATEGORY_EMOJIS } from '@/lib/categories';
+import { TrendingUp, Calendar, BarChart2, Tag } from 'lucide-react';
+
+export default function SummaryCards() {
+  const { getTotalAmount, getCurrentMonthTotal, getMonthlyAverage, getTopCategory } =
+    useAppContext();
+
+  const total = getTotalAmount();
+  const monthTotal = getCurrentMonthTotal();
+  const average = getMonthlyAverage();
+  const topCat = getTopCategory();
+
+  const cards = [
+    {
+      label: 'Total acumulado',
+      value: formatCurrency(total),
+      icon: TrendingUp,
+      bg: 'bg-indigo-50',
+      iconColor: 'text-indigo-600',
+      ring: 'ring-indigo-100',
+    },
+    {
+      label: 'Mes actual',
+      value: formatCurrency(monthTotal),
+      icon: Calendar,
+      bg: 'bg-blue-50',
+      iconColor: 'text-blue-600',
+      ring: 'ring-blue-100',
+    },
+    {
+      label: 'Promedio mensual',
+      value: formatCurrency(average),
+      icon: BarChart2,
+      bg: 'bg-violet-50',
+      iconColor: 'text-violet-600',
+      ring: 'ring-violet-100',
+    },
+    {
+      label: 'Categoría principal',
+      value: topCat ? `${CATEGORY_EMOJIS[topCat]} ${topCat}` : '—',
+      icon: Tag,
+      bg: 'bg-emerald-50',
+      iconColor: 'text-emerald-600',
+      ring: 'ring-emerald-100',
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {cards.map(({ label, value, icon: Icon, bg, iconColor, ring }) => (
+        <div
+          key={label}
+          className={`bg-white rounded-2xl border border-gray-200 p-5 flex items-start gap-4 ring-2 ${ring} hover:shadow-md transition-shadow`}
+        >
+          <div className={`${bg} rounded-xl p-2.5 flex-shrink-0`}>
+            <Icon className={`w-5 h-5 ${iconColor}`} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-500 font-medium truncate">{label}</p>
+            <p className="text-lg font-bold text-gray-900 mt-0.5 truncate">{value}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
