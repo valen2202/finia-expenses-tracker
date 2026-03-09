@@ -16,7 +16,18 @@ npm run lint       # ESLint check
 **Next.js 14 App Router** with TypeScript and Tailwind CSS. All UI text is in Spanish.
 
 ### State management
-A single React Context (`context/ExpensesContext.tsx`) wraps the entire app in `app/layout.tsx`. It owns all expense state, loads from `localStorage` on mount via `useEffect`, and exposes CRUD + derived data functions. Every page and component reads from this context — there is no other state layer.
+The app uses 4 focused React Contexts composed inside `context/AppContext.tsx` (Facade pattern):
+
+| Context | Hook | Responsibility |
+|---------|------|---------------|
+| `context/ExpensesContext.tsx` | `useExpenses()` | Expense CRUD + queries |
+| `context/ChatContext.tsx` | `useChat()` | Chat messages + NLP dispatch |
+| `context/AuthContext.tsx` | `useAuth()` | Supabase auth + import flow |
+| `context/UIContext.tsx` | `useUI()` | Cloud Hub drawer state |
+
+`useAppContext()` is a facade that merges all 4 hooks — use it only in existing components. **New code must use the focused hooks directly.**
+
+The Supabase layer is abstracted behind `services/IExpenseRepository.ts`. The concrete implementation is `services/SupabaseExpenseRepository.ts`. Contexts receive the repository via props (Dependency Inversion).
 
 ### Data persistence
 `lib/storage.ts` wraps `localStorage` under the key `gastos_tracker_v1`. All reads/writes go through `loadExpenses()` / `persistExpenses()`. Server-side rendering is safe because both functions guard with `typeof window === 'undefined'`.
@@ -64,3 +75,22 @@ Dates are stored as `YYYY-MM-DD` strings. Always construct `Date` objects as `ne
 ### Adding a new category
 1. Add to `Category` union in `types/expense.ts`
 2. Add entries to all four maps in `lib/categories.ts` (colors, badge classes, emojis)
+
+## SOLID Principles — REQUIRED for all new code
+
+Every new file and modification must respect these principles:
+
+| Principle | Rule |
+|-----------|------|
+| **S** Single Responsibility | Each module/class/function has ONE reason to change. No God objects. |
+| **O** Open/Closed | Extend behavior by adding new code, not modifying existing code. Use interfaces and composition. |
+| **L** Liskov Substitution | Subtypes must be substitutable for their base types without breaking behavior. |
+| **I** Interface Segregation | Consumers only depend on what they use. Prefer small, focused interfaces over large ones. |
+| **D** Dependency Inversion | Depend on abstractions (interfaces), not concretions. Inject dependencies via props/constructor. |
+
+### Practical rules
+- **New contexts**: must have a single responsibility. Never mix expenses + auth + chat in one context.
+- **New services**: must implement an interface (e.g. `IExpenseRepository`). Never import Supabase directly in contexts.
+- **New components**: use the focused hook (`useExpenses`, `useChat`, `useAuth`, `useUI`), not `useAppContext`.
+- **New lib functions**: must be pure (no side effects unless it's a storage/IO module).
+- **No inline persistence**: reads/writes to localStorage always go through `lib/storage.ts`.
