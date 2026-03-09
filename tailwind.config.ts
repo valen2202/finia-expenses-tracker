@@ -9,6 +9,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      padding: {
+        safe: 'env(safe-area-inset-bottom)',
+      },
       animation: {
         'slide-up': 'slideUp 0.25s ease-out',
         'fade-in': 'fadeIn 0.2s ease-out',
