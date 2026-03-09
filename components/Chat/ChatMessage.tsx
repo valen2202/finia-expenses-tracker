@@ -1,7 +1,7 @@
 'use client';
 
 import { ChatMessage as ChatMessageType } from '@/types/chat';
-import { Bot, User } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 interface Props {
   message: ChatMessageType;
@@ -34,34 +34,25 @@ export default function ChatMessage({ message }: Props) {
 
   if (isUser) {
     return (
-      <div className="flex items-end justify-end gap-2 group">
-        <div className="flex flex-col items-end gap-1 max-w-[75%]">
-          <div className="bg-indigo-600 text-white px-4 py-2.5 rounded-2xl rounded-br-sm text-sm leading-relaxed shadow-sm">
-            {message.content}
-          </div>
-          <span className="text-xs text-gray-400 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {time}
-          </span>
+      <div className="flex flex-col items-end gap-1">
+        <div className="max-w-[78%] bg-gradient-to-br from-indigo-500 to-violet-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm">
+          {message.content}
         </div>
-        <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0 mb-5">
-          <User className="w-3.5 h-3.5 text-indigo-600" />
-        </div>
+        <span className="text-[11px] text-gray-400 pr-1">{time}</span>
       </div>
     );
   }
 
   return (
-    <div className="flex items-end gap-2 group">
-      <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 mb-5 shadow-sm">
-        <Bot className="w-3.5 h-3.5 text-white" />
+    <div className="flex items-start gap-2.5">
+      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
+        <Sparkles className="w-3.5 h-3.5 text-white" />
       </div>
-      <div className="flex flex-col gap-1 max-w-[78%]">
-        <div className="bg-white border border-gray-100 text-gray-800 px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed shadow-sm">
+      <div className="flex flex-col gap-1 max-w-[80%]">
+        <div className="bg-white border border-gray-100 text-gray-800 px-4 py-2.5 rounded-2xl rounded-tl-sm text-sm leading-relaxed shadow-sm">
           <RichText content={message.content} />
         </div>
-        <span className="text-xs text-gray-400 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          FinIA · {time}
-        </span>
+        <span className="text-[11px] text-gray-400 pl-1">{time}</span>
       </div>
     </div>
   );
@@ -69,16 +60,16 @@ export default function ChatMessage({ message }: Props) {
 
 export function TypingIndicator() {
   return (
-    <div className="flex items-end gap-2">
-      <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
-        <Bot className="w-3.5 h-3.5 text-white" />
+    <div className="flex items-start gap-2.5">
+      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+        <Sparkles className="w-3.5 h-3.5 text-white" />
       </div>
-      <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm">
-        <div className="flex items-center gap-1">
+      <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
+        <div className="flex items-center gap-1.5">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"
+              className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"
               style={{ animationDelay: `${i * 0.15}s` }}
             />
           ))}

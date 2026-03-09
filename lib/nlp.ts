@@ -72,7 +72,7 @@ export function detectCategory(text: string): Category {
 function extractAmount(text: string): { amount: number; raw: string } | null {
   // Match: $1.500,50 | 1500,50 | 1.500 | $800 | 800 pesos | 800$
   const pattern =
-    /(?:\$\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(?:pesos?|ars|\$)?/gi;
+    /(?:\$\s*)?(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(?:pesos?|ars|\$)?/gi;
 
   let best: { amount: number; raw: string } | null = null;
   let m: RegExpExecArray | null;
