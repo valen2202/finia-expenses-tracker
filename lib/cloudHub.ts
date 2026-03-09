@@ -41,8 +41,8 @@ export interface ExportTemplate {
 export const TEMPLATES: ExportTemplate[] = [
   {
     id: 'fiscal',
-    name: 'Reporte Fiscal',
-    description: 'Gastos del año agrupados por categoría. Ideal para AFIP.',
+    name: 'Reporte Fiscal AFIP',
+    description: 'Gastos del año con subtotales por categoría, resumen al pie y BOM para Excel.',
     format: 'CSV',
     icon: '🧾',
     accent: 'border-blue-200 bg-blue-50',
@@ -171,57 +171,63 @@ function triggerDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function runTemplateExport(
-  template: ExportTemplate,
-  expenses: Expense[],
-): { sizeKB: number } {
-  const filtered = template.filterFn(expenses);
-  const slug = template.id + '_' + new Date().toISOString().split('T')[0];
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-  if (template.format === 'CSV') {
-    const headers = ['Fecha', 'Descripción', 'Categoría', 'Monto'];
-    const rows = filtered.map((e) => [
-      formatDate(e.date),
-      `"${e.description.replace(/"/g, '""')}"`,
-      e.category,
-      e.amount.toFixed(2),
-    ]);
-    const content = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    triggerDownload(blob, `${slug}.csv`);
-    return { sizeKB: Math.max(1, Math.round(content.length / 1024)) };
-  }
+export function exportCSV(expenses: Expense[], filename: string): { sizeKB: number } {
+  const headers = ['Fecha', 'Descripción', 'Categoría', 'Monto'];
+  const rows = expenses.map((e) => [
+    formatDate(e.date),
+    `"${e.description.replace(/"/g, '""')}"`,
+    e.category,
+    e.amount.toFixed(2),
+  ]);
+  const content = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  triggerDownload(blob, `${filename}.csv`);
+  return { sizeKB: Math.max(1, Math.round(content.length / 1024)) };
+}
 
-  if (template.format === 'JSON') {
-    const data = {
-      exportedAt: new Date().toISOString(),
-      template: template.name,
-      totalRecords: filtered.length,
-      totalAmount: filtered.reduce((s, e) => s + e.amount, 0),
-      expenses: filtered.map((e) => ({
-        fecha: e.date,
-        descripcion: e.description,
-        categoria: e.category,
-        monto: e.amount,
-      })),
-    };
-    const content = JSON.stringify(data, null, 2);
-    const blob = new Blob([content], { type: 'application/json' });
-    triggerDownload(blob, `${slug}.json`);
-    return { sizeKB: Math.max(1, Math.round(content.length / 1024)) };
-  }
+export function exportJSON(expenses: Expense[], filename: string, label?: string): { sizeKB: number } {
+  const data = {
+    exportedAt: new Date().toISOString(),
+    template: label ?? filename,
+    totalRecords: expenses.length,
+    totalAmount: expenses.reduce((s, e) => s + e.amount, 0),
+    expenses: expenses.map((e) => ({
+      fecha: e.date,
+      descripcion: e.description,
+      categoria: e.category,
+      monto: e.amount,
+    })),
+  };
+  const content = JSON.stringify(data, null, 2);
+  const blob = new Blob([content], { type: 'application/json' });
+  triggerDownload(blob, `${filename}.json`);
+  return { sizeKB: Math.max(1, Math.round(content.length / 1024)) };
+}
 
-  // PDF via print window
-  const total = filtered.reduce((s, e) => s + e.amount, 0);
-  const rows = filtered
+export function exportPDF(expenses: Expense[], filename: string, title?: string): { sizeKB: number } {
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  const rows = expenses
     .map(
       (e) => `<tr>
-      <td>${formatDate(e.date)}</td><td>${e.description}</td>
-      <td>${e.category}</td><td class="amt">${formatCurrency(e.amount)}</td>
+      <td>${escapeHtml(formatDate(e.date))}</td>
+      <td>${escapeHtml(e.description)}</td>
+      <td>${escapeHtml(e.category)}</td>
+      <td class="amt">${escapeHtml(formatCurrency(e.amount))}</td>
     </tr>`,
     )
     .join('');
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${slug}</title>
+  const safeTitle = escapeHtml(title ?? filename);
+  const safeFilename = escapeHtml(filename);
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${safeFilename}</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;padding:32px;color:#111;font-size:12px}
 .hdr{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #4f46e5;padding-bottom:12px;margin-bottom:20px}
 .logo{font-size:22px;font-weight:800;color:#4f46e5}.sub{font-size:11px;color:#888;text-align:right}
@@ -231,15 +237,93 @@ td{padding:8px 12px;border-bottom:1px solid #eee}.amt{text-align:right;font-weig
 th:last-child{text-align:right}tr:nth-child(even)td{background:#f8f8ff}
 .ftr{display:flex;justify-content:space-between;padding-top:12px;margin-top:16px;border-top:2px solid #e5e7eb;font-size:13px}
 .ftr-total{font-weight:700;color:#4f46e5;font-size:15px}</style></head>
-<body><div class="hdr"><div class="logo">FinIA</div><div class="sub"><div>${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</div><div>${slug}</div></div></div>
-<div class="tmpl">${template.name}</div>
+<body><div class="hdr"><div class="logo">FinIA</div><div class="sub"><div>${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</div><div>${safeFilename}</div></div></div>
+<div class="tmpl">${safeTitle}</div>
 <table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead>
 <tbody>${rows}</tbody></table>
-<div class="ftr"><span>${filtered.length} registros</span><span class="ftr-total">Total: ${formatCurrency(total)}</span></div>
+<div class="ftr"><span>${expenses.length} registros</span><span class="ftr-total">Total: ${escapeHtml(formatCurrency(total))}</span></div>
 <script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`;
   const win = window.open('', '_blank');
   if (win) { win.document.write(html); win.document.close(); }
   return { sizeKB: Math.max(1, Math.round(html.length / 1024)) };
+}
+
+export function exportAFIPCSV(expenses: Expense[], filename: string): { sizeKB: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+
+  // Ordenar por categoría ASC, luego fecha ASC
+  const sorted = [...expenses].sort((a, b) => {
+    const cat = a.category.localeCompare(b.category, 'es');
+    return cat !== 0 ? cat : a.date.localeCompare(b.date);
+  });
+
+  // Agrupar por categoría
+  const byCategory: Record<string, Expense[]> = {};
+  sorted.forEach((e) => {
+    if (!byCategory[e.category]) byCategory[e.category] = [];
+    byCategory[e.category].push(e);
+  });
+
+  const grandTotal = expenses.reduce((s, e) => s + e.amount, 0);
+  const lines: string[] = [];
+
+  // Encabezado del reporte
+  lines.push('"REPORTE FISCAL — AFIP"');
+  lines.push(`"Período:","Año ${year}"`);
+  lines.push(`"Generado:","${now.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}"`);
+  lines.push(`"Total de registros:","${expenses.length}"`);
+  lines.push(`"Total general:","${grandTotal.toFixed(2)}"`);
+  lines.push('');
+
+  // Columnas
+  lines.push('"Nro","Fecha","Descripción","Categoría","Monto (ARS)"');
+
+  // Filas con subtotales por categoría
+  let rowNum = 1;
+  Object.entries(byCategory).forEach(([category, items]) => {
+    items.forEach((e) => {
+      const [yr, mo, dy] = e.date.split('-');
+      const displayDate = `${dy}/${mo}/${yr}`;
+      const desc = e.description.replace(/"/g, '""');
+      lines.push(`"${rowNum}","${displayDate}","${desc}","${category}","${e.amount.toFixed(2)}"`);
+      rowNum++;
+    });
+    const subtotal = items.reduce((s, e) => s + e.amount, 0);
+    lines.push(`"","","Subtotal ${category}","","${subtotal.toFixed(2)}"`);
+    lines.push('');
+  });
+
+  // Total general
+  lines.push(`"","","","TOTAL GENERAL","${grandTotal.toFixed(2)}"`);
+  lines.push('');
+
+  // Resumen por categoría
+  lines.push('"RESUMEN POR CATEGORÍA"');
+  lines.push('"Categoría","Cantidad","Monto (ARS)","% del Total"');
+  Object.entries(byCategory).forEach(([category, items]) => {
+    const subtotal = items.reduce((s, e) => s + e.amount, 0);
+    const pct = grandTotal > 0 ? ((subtotal / grandTotal) * 100).toFixed(1) : '0.0';
+    lines.push(`"${category}","${items.length}","${subtotal.toFixed(2)}","${pct}%"`);
+  });
+  lines.push(`"TOTAL","${expenses.length}","${grandTotal.toFixed(2)}","100.0%"`);
+
+  const content = '\uFEFF' + lines.join('\n');
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  triggerDownload(blob, `${filename}.csv`);
+  return { sizeKB: Math.max(1, Math.round(content.length / 1024)) };
+}
+
+export function runTemplateExport(
+  template: ExportTemplate,
+  expenses: Expense[],
+): { sizeKB: number } {
+  const filtered = template.filterFn(expenses);
+  const slug = template.id + '_' + new Date().toISOString().split('T')[0];
+  if (template.id === 'fiscal') return exportAFIPCSV(filtered, slug);
+  if (template.format === 'CSV') return exportCSV(filtered, slug);
+  if (template.format === 'JSON') return exportJSON(filtered, slug, template.name);
+  return exportPDF(filtered, slug, template.name);
 }
 
 // ─── Share Link Generator ─────────────────────────────────────────────────────

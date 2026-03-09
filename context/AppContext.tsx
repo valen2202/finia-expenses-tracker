@@ -6,9 +6,11 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   useRef,
   ReactNode,
 } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { Expense, ExpenseFormData, ExpenseFilter, Category } from '@/types/expense';
 import { ChatMessage } from '@/types/chat';
 import { loadExpenses, persistExpenses } from '@/lib/storage';
@@ -16,8 +18,9 @@ import { generateId } from '@/lib/utils';
 import { parse } from '@/lib/nlp';
 import { generateBotResponse, WELCOME_MESSAGE, getMotivationalGreeting } from '@/lib/bot';
 import { exportToCSV } from '@/lib/export';
+import { createClient } from '@/lib/supabase';
 
-// ─── Storage helpers for chat ─────────────────────────────────────────────────
+// ─── Chat persistence ─────────────────────────────────────────────────────────
 
 const CHAT_KEY = 'gastos_chat_v1';
 
@@ -83,7 +86,6 @@ function buildSampleExpenses(): Expense[] {
 // ─── Context Type ─────────────────────────────────────────────────────────────
 
 interface AppContextType {
-  // Expenses
   expenses: Expense[];
   isLoaded: boolean;
   addExpense: (data: ExpenseFormData) => Expense;
@@ -97,12 +99,18 @@ interface AppContextType {
   getTopCategory: () => Category | null;
   getMonthlyData: () => { month: string; total: number }[];
   loadSampleData: () => void;
-
-  // Chat
   messages: ChatMessage[];
   isTyping: boolean;
   handleUserInput: (text: string) => Promise<void>;
   clearChat: () => void;
+  isCloudHubOpen: boolean;
+  openCloudHub: () => void;
+  closeCloudHub: () => void;
+  user: User | null;
+  signOut: () => Promise<void>;
+  pendingImport: boolean;
+  importLocalData: () => Promise<void>;
+  dismissImport: () => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -120,43 +128,86 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [isCloudHubOpen, setIsCloudHubOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [pendingImport, setPendingImport] = useState(false);
 
-  // Keep a ref so async callbacks always see latest expenses
+  const openCloudHub = useCallback(() => setIsCloudHubOpen(true), []);
+  const closeCloudHub = useCallback(() => setIsCloudHubOpen(false), []);
+
+  const supabase = useMemo(() => createClient(), []);
+
   const expensesRef = useRef<Expense[]>([]);
+  const userRef = useRef<User | null>(null);
+
+  useEffect(() => { expensesRef.current = expenses; }, [expenses]);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  // ─── Auth + initial load ────────────────────────────────────────────────────
+
   useEffect(() => {
-    expensesRef.current = expenses;
-  }, [expenses]);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const storedExpenses = loadExpenses();
-    const storedChat = loadChat();
+        if (currentUser) {
+          const { data, error } = await supabase
+            .from('expenses')
+            .select('*')
+            .order('date', { ascending: false });
 
-    setExpenses(storedExpenses);
+          if (!error && data) {
+            const mapped: Expense[] = data.map((row) => ({
+              id: row.id,
+              date: row.date,
+              amount: Number(row.amount),
+              category: row.category as Category,
+              description: row.description,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at ?? undefined,
+            }));
+            setExpenses(mapped);
+            persistExpenses(mapped);
 
-    if (storedChat.length > 0) {
-      // Resume with a greeting based on current data
-      const greeting: ChatMessage = {
-        id: generateId(),
-        role: 'bot',
-        content: getMotivationalGreeting(storedExpenses),
-        timestamp: new Date().toISOString(),
-      };
-      setMessages([...storedChat, greeting]);
-    } else {
-      const welcome: ChatMessage = {
-        id: generateId(),
-        role: 'bot',
-        content: WELCOME_MESSAGE,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages([welcome]);
-    }
+            if (event === 'SIGNED_IN' && mapped.length === 0) {
+              const localData = loadExpenses();
+              if (localData.length > 0) setPendingImport(true);
+            }
+          }
+        } else {
+          setExpenses(loadExpenses());
+        }
 
-    setIsLoaded(true);
+        const storedChat = loadChat();
+        if (storedChat.length > 0) {
+          setMessages([
+            ...storedChat,
+            {
+              id: generateId(),
+              role: 'bot',
+              content: getMotivationalGreeting(loadExpenses()),
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+        } else {
+          setMessages([{
+            id: generateId(),
+            role: 'bot',
+            content: WELCOME_MESSAGE,
+            timestamp: new Date().toISOString(),
+          }]);
+        }
+
+        setIsLoaded(true);
+      },
+    );
+
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Expense Operations ─────────────────────────────────────────────────────
+  // ─── Expense helpers ────────────────────────────────────────────────────────
 
   const sortAndSave = (list: Expense[]) => {
     const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
@@ -165,29 +216,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addExpense = useCallback((data: ExpenseFormData): Expense => {
-    const newExpense: Expense = {
-      ...data,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-    };
+    const newExpense: Expense = { ...data, id: generateId(), createdAt: new Date().toISOString() };
     setExpenses((prev) => sortAndSave([...prev, newExpense]));
+
+    const cu = userRef.current;
+    if (cu) {
+      supabase.from('expenses').insert({
+        id: newExpense.id, user_id: cu.id, date: newExpense.date,
+        amount: newExpense.amount, category: newExpense.category,
+        description: newExpense.description, created_at: newExpense.createdAt,
+      }).then(({ error }) => { if (error) console.error('insert:', error.message); });
+    }
     return newExpense;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updateExpense = useCallback((id: string, data: ExpenseFormData) => {
-    setExpenses((prev) =>
-      sortAndSave(
-        prev.map((e) => (e.id === id ? { ...e, ...data, updatedAt: new Date().toISOString() } : e)),
-      ),
-    );
+    const updatedAt = new Date().toISOString();
+    setExpenses((prev) => sortAndSave(prev.map((e) => (e.id === id ? { ...e, ...data, updatedAt } : e))));
+
+    const cu = userRef.current;
+    if (cu) {
+      supabase.from('expenses').update({
+        date: data.date, amount: data.amount, category: data.category,
+        description: data.description, updated_at: updatedAt,
+      }).eq('id', id).eq('user_id', cu.id)
+        .then(({ error }) => { if (error) console.error('update:', error.message); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const deleteExpense = useCallback((id: string) => {
-    setExpenses((prev) => {
-      const updated = prev.filter((e) => e.id !== id);
-      persistExpenses(updated);
-      return updated;
-    });
+    setExpenses((prev) => { const u = prev.filter((e) => e.id !== id); persistExpenses(u); return u; });
+
+    const cu = userRef.current;
+    if (cu) {
+      supabase.from('expenses').delete().eq('id', id).eq('user_id', cu.id)
+        .then(({ error }) => { if (error) console.error('delete:', error.message); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getFilteredExpenses = useCallback(
@@ -206,10 +273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [expenses],
   );
 
-  const getTotalAmount = useCallback(
-    () => expenses.reduce((s, e) => s + e.amount, 0),
-    [expenses],
-  );
+  const getTotalAmount = useCallback(() => expenses.reduce((s, e) => s + e.amount, 0), [expenses]);
 
   const getCurrentMonthTotal = useCallback(() => {
     const now = new Date();
@@ -224,20 +288,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getMonthlyAverage = useCallback(() => {
     if (expenses.length === 0) return 0;
     const map: Record<string, number> = {};
-    expenses.forEach((e) => {
-      const k = e.date.substring(0, 7);
-      map[k] = (map[k] || 0) + e.amount;
-    });
+    expenses.forEach((e) => { const k = e.date.substring(0, 7); map[k] = (map[k] || 0) + e.amount; });
     const vals = Object.values(map);
     return vals.reduce((s, v) => s + v, 0) / vals.length;
   }, [expenses]);
 
   const getCategoryTotals = useCallback(
     (): Record<string, number> =>
-      expenses.reduce((acc, e) => {
-        acc[e.category] = (acc[e.category] || 0) + e.amount;
-        return acc;
-      }, {} as Record<string, number>),
+      expenses.reduce((acc, e) => { acc[e.category] = (acc[e.category] || 0) + e.amount; return acc; }, {} as Record<string, number>),
     [expenses],
   );
 
@@ -254,10 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
       const total = expenses
-        .filter((e) => {
-          const ed = new Date(e.date + 'T00:00:00');
-          return ed.getFullYear() === d.getFullYear() && ed.getMonth() === d.getMonth();
-        })
+        .filter((e) => { const ed = new Date(e.date + 'T00:00:00'); return ed.getFullYear() === d.getFullYear() && ed.getMonth() === d.getMonth(); })
         .reduce((s, e) => s + e.amount, 0);
       return { month: MONTHS[d.getMonth()], total };
     });
@@ -267,45 +322,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const samples = buildSampleExpenses();
     setExpenses(samples);
     persistExpenses(samples);
+    const cu = userRef.current;
+    if (cu) {
+      supabase.from('expenses').upsert(
+        samples.map((e) => ({ id: e.id, user_id: cu.id, date: e.date, amount: e.amount, category: e.category, description: e.description, created_at: e.createdAt })),
+        { onConflict: 'id' },
+      ).then(({ error }) => { if (error) console.error('sample upsert:', error.message); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Chat Operations ────────────────────────────────────────────────────────
+  // ─── Auth ───────────────────────────────────────────────────────────────────
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setExpenses([]);
+    setPendingImport(false);
+  }, [supabase]);
+
+  const importLocalData = useCallback(async () => {
+    const cu = userRef.current;
+    if (!cu) return;
+    const localData = loadExpenses();
+    if (!localData.length) { setPendingImport(false); return; }
+    const { error } = await supabase.from('expenses').upsert(
+      localData.map((e) => ({ id: e.id, user_id: cu.id, date: e.date, amount: e.amount, category: e.category, description: e.description, created_at: e.createdAt, updated_at: e.updatedAt ?? null })),
+      { onConflict: 'id' },
+    );
+    if (!error) { setExpenses(localData); setPendingImport(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const dismissImport = useCallback(() => setPendingImport(false), []);
+
+  // ─── Chat ───────────────────────────────────────────────────────────────────
 
   const pushMessage = (msg: ChatMessage) => {
-    setMessages((prev) => {
-      const updated = [...prev, msg];
-      persistChat(updated);
-      return updated;
-    });
+    setMessages((prev) => { const updated = [...prev, msg]; persistChat(updated); return updated; });
   };
 
   const handleUserInput = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;
 
-    // Add user message immediately
-    pushMessage({
-      id: generateId(),
-      role: 'user',
-      content: text.trim(),
-      timestamp: new Date().toISOString(),
-    });
+    pushMessage({ id: generateId(), role: 'user', content: text.trim(), timestamp: new Date().toISOString() });
     setIsTyping(true);
 
     const command = parse(text);
-
     let addedExpense: Expense | undefined;
     let deletedExpense: Expense | undefined;
 
-    // Execute command (use ref for latest expenses)
     switch (command.type) {
       case 'expense':
         if (command.expense) {
-          addedExpense = {
-            ...command.expense,
-            id: generateId(),
-            createdAt: new Date().toISOString(),
-          };
+          addedExpense = { ...command.expense, id: generateId(), createdAt: new Date().toISOString() };
           setExpenses((prev) => sortAndSave([...prev, addedExpense!]));
+          const cu = userRef.current;
+          if (cu) {
+            supabase.from('expenses').insert({
+              id: addedExpense.id, user_id: cu.id, date: addedExpense.date,
+              amount: addedExpense.amount, category: addedExpense.category,
+              description: addedExpense.description, created_at: addedExpense.createdAt,
+            }).then(({ error }) => { if (error) console.error('chat insert:', error.message); });
+          }
         }
         break;
 
@@ -313,11 +392,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deletedExpense = expensesRef.current[0];
         if (deletedExpense) {
           const id = deletedExpense.id;
-          setExpenses((prev) => {
-            const updated = prev.filter((e) => e.id !== id);
-            persistExpenses(updated);
-            return updated;
-          });
+          setExpenses((prev) => { const u = prev.filter((e) => e.id !== id); persistExpenses(u); return u; });
+          const cu = userRef.current;
+          if (cu) {
+            supabase.from('expenses').delete().eq('id', id).eq('user_id', cu.id)
+              .then(({ error }) => { if (error) console.error('chat delete:', error.message); });
+          }
         }
         break;
 
@@ -326,23 +406,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         break;
     }
 
-    // Simulate typing delay for natural feel
-    const delay = 350 + Math.random() * 250;
-    await new Promise((r) => setTimeout(r, delay));
-
-    const response = generateBotResponse(
-      command,
-      addedExpense
-        ? [...expensesRef.current, addedExpense]
-        : expensesRef.current,
-      addedExpense,
-      deletedExpense,
-    );
+    await new Promise((r) => setTimeout(r, 350 + Math.random() * 250));
 
     pushMessage({
-      id: generateId(),
-      role: 'bot',
-      content: response,
+      id: generateId(), role: 'bot',
+      content: generateBotResponse(command, addedExpense ? [...expensesRef.current, addedExpense] : expensesRef.current, addedExpense, deletedExpense),
       timestamp: new Date().toISOString(),
     });
     setIsTyping(false);
@@ -350,12 +418,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [isTyping]);
 
   const clearChat = useCallback(() => {
-    const welcome: ChatMessage = {
-      id: generateId(),
-      role: 'bot',
-      content: WELCOME_MESSAGE,
-      timestamp: new Date().toISOString(),
-    };
+    const welcome: ChatMessage = { id: generateId(), role: 'bot', content: WELCOME_MESSAGE, timestamp: new Date().toISOString() };
     setMessages([welcome]);
     persistChat([welcome]);
   }, []);
@@ -369,6 +432,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         getMonthlyAverage, getCategoryTotals, getTopCategory,
         getMonthlyData, loadSampleData,
         messages, isTyping, handleUserInput, clearChat,
+        isCloudHubOpen, openCloudHub, closeCloudHub,
+        user, signOut, pendingImport, importLocalData, dismissImport,
       }}
     >
       {children}

@@ -1,0 +1,26 @@
+{
+  "name": "FinIA — Asistente Financiero",
+  "short_name": "FinIA",
+  "description": "Registrá gastos en lenguaje natural con tu asistente financiero personal",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f9fafb",
+  "theme_color": "#4f46e5",
+  "categories": ["finance", "productivity"],
+  "lang": "es-AR",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

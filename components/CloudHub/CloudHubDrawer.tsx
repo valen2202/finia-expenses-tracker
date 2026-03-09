@@ -1,31 +1,47 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import { Category } from '@/types/expense';
 import {
   TEMPLATES,
   loadHistory, addToHistory, clearHistory,
   loadIntegrations, saveIntegrations,
   loadSchedule, saveSchedule,
   runTemplateExport, generateShareLink,
+  exportCSV, exportJSON, exportPDF,
   ExportRecord, IntegrationStatus, ScheduleConfig,
 } from '@/lib/cloudHub';
 import {
-  X, Cloud, FileText, Clock, Share2, Zap,
+  X, Cloud, FileText, FileJson, Printer, Clock, Share2, Zap,
   Mail, CheckCircle2, RefreshCw, Copy, Check,
-  Bell, Calendar, Download, Trash2, Loader2,
-  Table, HardDrive, Link, QrCode, ExternalLink,
+  Bell, Download, Trash2, Loader2,
+  Table, HardDrive, Link, SlidersHorizontal,
+  ExternalLink, ChevronDown,
 } from 'lucide-react';
 
-type Tab = 'templates' | 'integrations' | 'schedule' | 'history' | 'share';
+type Tab = 'templates' | 'custom' | 'integrations' | 'schedule' | 'history' | 'share';
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'templates', label: 'Plantillas', icon: Zap },
+  { id: 'custom', label: 'Personalizado', icon: SlidersHorizontal },
   { id: 'integrations', label: 'Integraciones', icon: Cloud },
   { id: 'schedule', label: 'Programar', icon: Bell },
   { id: 'history', label: 'Historial', icon: Clock },
   { id: 'share', label: 'Compartir', icon: Share2 },
+];
+
+const ALL_CATEGORIES: Category[] = [
+  'Comida', 'Transporte', 'Entretenimiento', 'Compras', 'Facturas', 'Otro',
+];
+
+type ExportFormat = 'CSV' | 'JSON' | 'PDF';
+
+const FORMAT_OPTIONS: { id: ExportFormat; label: string; icon: React.ElementType; desc: string }[] = [
+  { id: 'CSV', label: 'CSV', icon: FileText, desc: 'Excel / Google Sheets' },
+  { id: 'JSON', label: 'JSON', icon: FileJson, desc: 'Developers / APIs' },
+  { id: 'PDF', label: 'PDF', icon: Printer, desc: 'Imprimir / Archivar' },
 ];
 
 interface Props { onClose: () => void }
@@ -41,11 +57,35 @@ export default function CloudHubDrawer({ onClose }: Props) {
   const [copied, setCopied] = useState(false);
   const [shareExpiry, setShareExpiry] = useState<'1d' | '7d' | '30d' | 'never'>('7d');
 
+  // ── Custom export state ──────────────────────────────────────────────────────
+  const today = new Date().toISOString().split('T')[0];
+  const [customFormat, setCustomFormat] = useState<ExportFormat>('CSV');
+  const [customDateFrom, setCustomDateFrom] = useState('');
+  const [customDateTo, setCustomDateTo] = useState(today);
+  const [customCats, setCustomCats] = useState<Set<Category>>(new Set(ALL_CATEGORIES));
+  const [customFilename, setCustomFilename] = useState(`gastos_${today}`);
+  const [customExporting, setCustomExporting] = useState(false);
+
   useEffect(() => {
     setHistory(loadHistory());
     setIntegrations(loadIntegrations());
     setSchedule(loadSchedule());
   }, []);
+
+  const customFiltered = useMemo(
+    () =>
+      expenses.filter((e) => {
+        if (customDateFrom && e.date < customDateFrom) return false;
+        if (customDateTo && e.date > customDateTo) return false;
+        if (!customCats.has(e.category)) return false;
+        return true;
+      }),
+    [expenses, customDateFrom, customDateTo, customCats],
+  );
+
+  const customTotal = customFiltered.reduce((s, e) => s + e.amount, 0);
+  const customPreview = customFiltered.slice(0, 5);
+  const customRemaining = customFiltered.length - customPreview.length;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -56,16 +96,49 @@ export default function CloudHubDrawer({ onClose }: Props) {
     await new Promise((r) => setTimeout(r, 800));
     const filtered = template.filterFn(expenses);
     const { sizeKB } = runTemplateExport(template, expenses);
-    const record: Omit<ExportRecord, 'id'> = {
+    addToHistory({
       templateName: template.name,
       format: template.format,
       timestamp: new Date().toISOString(),
       recordCount: filtered.length,
       fileSizeKB: sizeKB,
-    };
-    addToHistory(record);
+    });
     setHistory(loadHistory());
     setExportingId(null);
+  };
+
+  const handleCustomExport = async () => {
+    if (customFiltered.length === 0 || customExporting) return;
+    setCustomExporting(true);
+    await new Promise((r) => setTimeout(r, 700));
+    let sizeKB = 0;
+    if (customFormat === 'CSV') ({ sizeKB } = exportCSV(customFiltered, customFilename));
+    else if (customFormat === 'JSON') ({ sizeKB } = exportJSON(customFiltered, customFilename, 'Exportación personalizada'));
+    else ({ sizeKB } = exportPDF(customFiltered, customFilename, 'Exportación personalizada'));
+    addToHistory({
+      templateName: 'Personalizado',
+      format: customFormat,
+      timestamp: new Date().toISOString(),
+      recordCount: customFiltered.length,
+      fileSizeKB: sizeKB,
+    });
+    setHistory(loadHistory());
+    setCustomExporting(false);
+  };
+
+  const toggleCustomCat = (cat: Category) => {
+    setCustomCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
+  const toggleAllCats = () => {
+    setCustomCats(
+      customCats.size === ALL_CATEGORIES.length ? new Set() : new Set(ALL_CATEGORIES),
+    );
   };
 
   const handleConnect = async (service: keyof IntegrationStatus) => {
@@ -138,6 +211,182 @@ export default function CloudHubDrawer({ onClose }: Props) {
     </div>
   );
 
+  const renderCustom = () => (
+    <div className="space-y-5">
+      {/* Format selector */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          Formato
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {FORMAT_OPTIONS.map(({ id, label, icon: Icon, desc }) => (
+            <button
+              key={id}
+              onClick={() => setCustomFormat(id)}
+              className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                customFormat === id
+                  ? 'border-indigo-500 bg-indigo-50 shadow-sm'
+                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Icon className={`w-5 h-5 ${customFormat === id ? 'text-indigo-600' : 'text-gray-400'}`} />
+              <p className={`text-xs font-bold ${customFormat === id ? 'text-indigo-700' : 'text-gray-700'}`}>
+                {label}
+              </p>
+              <p className="text-[10px] text-gray-400 text-center leading-tight">{desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Date range */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          Rango de fechas
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-gray-500 mb-1.5 block">Desde</label>
+            <input
+              type="date"
+              value={customDateFrom}
+              onChange={(e) => setCustomDateFrom(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1.5 block">Hasta</label>
+            <input
+              type="date"
+              value={customDateTo}
+              onChange={(e) => setCustomDateTo(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Category filter */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Categorías</p>
+          <button
+            onClick={toggleAllCats}
+            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+          >
+            {customCats.size === ALL_CATEGORIES.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {ALL_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => toggleCustomCat(cat)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                customCats.has(cat)
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Preview table */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          Vista previa
+          {customFiltered.length > 0 && (
+            <span className="ml-2 normal-case font-normal text-gray-400">
+              — {customPreview.length} de {customFiltered.length}
+            </span>
+          )}
+        </p>
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-3 py-2 font-semibold text-gray-600">Fecha</th>
+                <th className="text-left px-3 py-2 font-semibold text-gray-600">Descripción</th>
+                <th className="text-right px-3 py-2 font-semibold text-gray-600">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customPreview.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="text-center py-8 text-gray-400">
+                    Ningún registro coincide con los filtros
+                  </td>
+                </tr>
+              ) : (
+                customPreview.map((exp) => (
+                  <tr key={exp.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{formatDate(exp.date)}</td>
+                    <td className="px-3 py-2 text-gray-800 max-w-[130px] truncate">{exp.description}</td>
+                    <td className="px-3 py-2 text-gray-900 font-semibold text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(exp.amount)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          {customRemaining > 0 && (
+            <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 text-xs text-gray-400 text-center flex items-center justify-center gap-1">
+              <ChevronDown className="w-3 h-3" />
+              {customRemaining} registro{customRemaining !== 1 ? 's' : ''} más
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filename */}
+      <div>
+        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">
+          Nombre del archivo
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={customFilename}
+            onChange={(e) => setCustomFilename(e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            placeholder="nombre_archivo"
+          />
+          <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2.5 py-2 rounded-xl border border-gray-200 flex-shrink-0">
+            .{customFormat.toLowerCase()}
+          </span>
+        </div>
+      </div>
+
+      {/* Footer summary + export button */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+        <div className="text-xs text-gray-500">
+          <span className="font-bold text-gray-900">{customFiltered.length}</span> registro{customFiltered.length !== 1 ? 's' : ''}
+          {customFiltered.length > 0 && (
+            <>
+              <span className="mx-1.5 text-gray-300">·</span>
+              <span className="font-bold text-gray-900">{formatCurrency(customTotal)}</span>
+            </>
+          )}
+        </div>
+        <button
+          onClick={handleCustomExport}
+          disabled={customFiltered.length === 0 || customExporting}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+        >
+          {customExporting ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Exportando…</>
+          ) : (
+            <><Download className="w-3.5 h-3.5" />Exportar {customFormat}</>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
   const renderIntegrations = () => {
     const services = [
       { key: 'googleSheets' as const, name: 'Google Sheets', icon: Table, desc: 'Sincronizá automáticamente con una hoja de cálculo en Drive.', color: 'text-green-600' },
@@ -196,11 +445,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
                       )}
                     </div>
                     <p className="text-xs text-gray-500">{desc}</p>
-                    {connected && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Última sincronización: hace un momento
-                      </p>
-                    )}
                   </div>
                 </div>
                 <button
@@ -232,19 +476,14 @@ export default function CloudHubDrawer({ onClose }: Props) {
   const renderSchedule = () => {
     const nextExport = () => {
       const now = new Date();
-      if (schedule.frequency === 'daily') {
-        now.setDate(now.getDate() + 1);
-      } else if (schedule.frequency === 'weekly') {
-        now.setDate(now.getDate() + 7);
-      } else {
-        now.setMonth(now.getMonth() + 1);
-      }
+      if (schedule.frequency === 'daily') now.setDate(now.getDate() + 1);
+      else if (schedule.frequency === 'weekly') now.setDate(now.getDate() + 7);
+      else now.setMonth(now.getMonth() + 1);
       return now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
     };
 
     return (
       <div className="space-y-5">
-        {/* Enable toggle */}
         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
           <div>
             <p className="text-sm font-semibold text-gray-900">Exportaciones automáticas</p>
@@ -268,7 +507,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
 
         {schedule.enabled && (
           <>
-            {/* Frequency */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">
                 Frecuencia
@@ -290,7 +528,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
               </div>
             </div>
 
-            {/* Time */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">
                 Hora de envío
@@ -303,7 +540,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
               />
             </div>
 
-            {/* Destination */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">
                 Destino
@@ -340,7 +576,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
   };
 
   const renderHistory = () => {
-    const formatIcons: Record<string, React.ElementType> = { CSV: FileText, JSON: FileText, PDF: FileText };
     const formatColors: Record<string, string> = {
       CSV: 'text-emerald-600 bg-emerald-50',
       JSON: 'text-blue-600 bg-blue-50',
@@ -370,7 +605,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
         </div>
         <div className="space-y-2">
           {history.map((record) => {
-            const FmtIcon = formatIcons[record.format] ?? FileText;
             const fmtColor = formatColors[record.format] ?? 'text-gray-600 bg-gray-50';
             const date = new Date(record.timestamp);
             const relTime = (() => {
@@ -385,7 +619,7 @@ export default function CloudHubDrawer({ onClose }: Props) {
             return (
               <div key={record.id} className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-gray-200 transition-colors">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${fmtColor}`}>
-                  <FmtIcon className="w-4 h-4" />
+                  <FileText className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-gray-800 truncate">{record.templateName}</p>
@@ -408,7 +642,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
         Generá un enlace público para compartir un resumen de tus finanzas. Solo se comparten totales, sin detalles privados.
       </p>
 
-      {/* QR + Link */}
       <div className="border border-gray-200 rounded-xl p-4 bg-white space-y-4">
         <div className="flex justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -439,7 +672,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
         </div>
       </div>
 
-      {/* Expiry */}
       <div>
         <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">
           Expiración del enlace
@@ -461,7 +693,6 @@ export default function CloudHubDrawer({ onClose }: Props) {
         </div>
       </div>
 
-      {/* Summary snippet */}
       <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
         <p className="text-xs font-semibold text-indigo-700 mb-2">Vista previa del resumen público</p>
         <div className="space-y-1.5">
@@ -485,6 +716,7 @@ export default function CloudHubDrawer({ onClose }: Props) {
 
   const tabContent: Record<Tab, React.ReactNode> = {
     templates: renderTemplates(),
+    custom: renderCustom(),
     integrations: renderIntegrations(),
     schedule: renderSchedule(),
     history: renderHistory(),
@@ -493,11 +725,11 @@ export default function CloudHubDrawer({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop — click to close */}
+      {/* Backdrop */}
       <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="w-[440px] bg-white h-full flex flex-col shadow-2xl border-l border-gray-200">
+      <div className="w-[460px] bg-white h-full flex flex-col shadow-2xl border-l border-gray-200">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
@@ -527,7 +759,7 @@ export default function CloudHubDrawer({ onClose }: Props) {
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`flex items-center gap-1.5 px-3.5 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
                 tab === id
                   ? 'border-indigo-600 text-indigo-700'
                   : 'border-transparent text-gray-500 hover:text-gray-800'

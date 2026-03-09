@@ -8,10 +8,9 @@ import ExpenseList from '@/components/Expenses/ExpenseList';
 import ExpenseForm from '@/components/Expenses/ExpenseForm';
 import Modal from '@/components/ui/Modal';
 import { ToastContainer, ToastData } from '@/components/ui/Toast';
-import { exportToCSV } from '@/lib/export';
 import { formatCurrency } from '@/lib/utils';
 import { generateId } from '@/lib/utils';
-import { Plus, Download, AlertTriangle, History } from 'lucide-react';
+import { Plus, Cloud, AlertTriangle, History } from 'lucide-react';
 
 const DEFAULT_FILTER: ExpenseFilter = {
   dateFrom: '',
@@ -21,7 +20,7 @@ const DEFAULT_FILTER: ExpenseFilter = {
 };
 
 export default function HistorialPage() {
-  const { addExpense, updateExpense, deleteExpense, getFilteredExpenses, isLoaded, expenses } =
+  const { addExpense, updateExpense, deleteExpense, getFilteredExpenses, isLoaded, expenses, openCloudHub } =
     useAppContext();
 
   const [filter, setFilter] = useState<ExpenseFilter>(DEFAULT_FILTER);
@@ -81,12 +80,6 @@ export default function HistorialPage() {
     setDeleteTarget(null);
   };
 
-  const handleExport = () => {
-    const toExport = filteredExpenses.length > 0 ? filteredExpenses : expenses;
-    exportToCSV(toExport);
-    showToast(`Se exportaron ${toExport.length} gastos a CSV`);
-  };
-
   if (!isLoaded) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -121,11 +114,11 @@ export default function HistorialPage() {
           <div className="flex items-center gap-2">
             {expenses.length > 0 && (
               <button
-                onClick={handleExport}
-                className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                onClick={openCloudHub}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 text-indigo-700 rounded-xl text-sm font-medium hover:from-indigo-100 hover:to-purple-100 transition-all shadow-sm"
               >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Exportar CSV</span>
+                <Cloud className="w-4 h-4" />
+                <span className="hidden sm:inline">Exportar</span>
               </button>
             )}
             <button
