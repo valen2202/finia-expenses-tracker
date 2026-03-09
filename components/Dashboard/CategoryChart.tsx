@@ -6,7 +6,6 @@ import { CATEGORY_COLORS } from '@/lib/categories';
 import { formatCurrency } from '@/lib/utils';
 import { Category } from '@/types/expense';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const { name, value, payload: p } = payload[0];
