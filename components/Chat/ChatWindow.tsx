@@ -59,7 +59,7 @@ export default function ChatWindow() {
       </div>
 
       {/* Input area */}
-      <div className="px-4 pb-4 pt-2 bg-white border-t border-gray-100 space-y-2.5">
+      <div className="px-4 pt-2 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] bg-white border-t border-gray-100 space-y-2.5">
         <QuickActions onSelect={handleUserInput} disabled={isTyping} />
         <ChatInput onSend={handleUserInput} disabled={isTyping} />
         <p className="text-center text-xs text-gray-400">

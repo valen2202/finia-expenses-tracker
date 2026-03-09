@@ -4,7 +4,28 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'forgot';
+
+function mapError(message: string): string {
+  if (message.includes('Invalid login credentials') || message.includes('invalid_credentials'))
+    return 'Email o contraseña incorrectos.';
+  if (message.includes('User already registered') || message.includes('already registered'))
+    return 'Este email ya está registrado. Iniciá sesión.';
+  if (message.includes('Password should be at least') || message.includes('at least 6'))
+    return 'La contraseña debe tener al menos 6 caracteres.';
+  if (message.includes('Email not confirmed') || message.includes('email_not_confirmed'))
+    return 'Tu email no fue confirmado aún. Revisá tu casilla.';
+  if (message.includes('rate limit') || message.includes('too many'))
+    return 'Demasiados intentos. Esperá unos minutos e intentá de nuevo.';
+  if (message.includes('Invalid email') || message.includes('valid email'))
+    return 'Ingresá un email válido.';
+  if (
+    message.toLowerCase().includes('failed to fetch') ||
+    message.toLowerCase().includes('network')
+  )
+    return 'Sin conexión. Verificá tu internet e intentá de nuevo.';
+  return 'Ocurrió un error. Intentá de nuevo.';
+}
 
 export default function LoginForm() {
   const [mode, setMode] = useState<Mode>('login');
@@ -29,29 +50,27 @@ export default function LoginForm() {
         if (error) throw error;
         router.push('/');
         router.refresh();
-      } else {
+      } else if (mode === 'register') {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         setSuccessMsg('¡Cuenta creada! Revisá tu email para confirmar tu cuenta.');
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/reset-password`,
+        });
+        if (error) throw error;
+        setSuccessMsg('Te enviamos un email para restablecer tu contraseña.');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al autenticarse';
-      if (message.includes('Invalid login credentials')) {
-        setError('Email o contraseña incorrectos.');
-      } else if (message.includes('User already registered')) {
-        setError('Este email ya está registrado. Iniciá sesión.');
-      } else if (message.includes('Password should be at least')) {
-        setError('La contraseña debe tener al menos 6 caracteres.');
-      } else {
-        setError(message);
-      }
+      setError(mapError(message));
     } finally {
       setLoading(false);
     }
   };
 
-  const switchMode = () => {
-    setMode(mode === 'login' ? 'register' : 'login');
+  const switchMode = (newMode: Mode) => {
+    setMode(newMode);
     setError(null);
     setSuccessMsg(null);
   };
@@ -71,38 +90,42 @@ export default function LoginForm() {
         {/* Card */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
           <h2 className="text-lg font-bold text-gray-900 mb-6">
-            {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+            {mode === 'login'
+              ? 'Iniciar sesión'
+              : mode === 'register'
+              ? 'Crear cuenta'
+              : 'Restablecer contraseña'}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1.5">
-                Email
-              </label>
+              <label className="text-sm font-medium text-gray-700 block mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 placeholder="tu@email.com"
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-colors"
               />
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1.5">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                placeholder="Mínimo 6 caracteres"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-colors"
-              />
-            </div>
+            {mode !== 'forgot' && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1.5">Contraseña</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  placeholder="Mínimo 6 caracteres"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-colors"
+                />
+              </div>
+            )}
 
             {error && (
               <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
@@ -125,20 +148,43 @@ export default function LoginForm() {
                 ? 'Cargando…'
                 : mode === 'login'
                 ? 'Iniciar sesión'
-                : 'Crear cuenta'}
+                : mode === 'register'
+                ? 'Crear cuenta'
+                : 'Enviar email'}
             </button>
+
+            {mode === 'login' && (
+              <button
+                type="button"
+                onClick={() => switchMode('forgot')}
+                className="w-full text-center text-sm text-indigo-600 hover:text-indigo-700 transition-colors"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            )}
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-            <p className="text-sm text-gray-500">
-              {mode === 'login' ? '¿No tenés cuenta?' : '¿Ya tenés cuenta?'}
-              <button
-                onClick={switchMode}
-                className="ml-1.5 text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
-              >
-                {mode === 'login' ? 'Registrarse' : 'Iniciar sesión'}
-              </button>
-            </p>
+            {mode === 'forgot' ? (
+              <p className="text-sm text-gray-500">
+                <button
+                  onClick={() => switchMode('login')}
+                  className="text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
+                >
+                  ← Volver al inicio de sesión
+                </button>
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500">
+                {mode === 'login' ? '¿No tenés cuenta?' : '¿Ya tenés cuenta?'}
+                <button
+                  onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+                  className="ml-1.5 text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
+                >
+                  {mode === 'login' ? 'Registrarse' : 'Iniciar sesión'}
+                </button>
+              </p>
+            )}
           </div>
         </div>
 
