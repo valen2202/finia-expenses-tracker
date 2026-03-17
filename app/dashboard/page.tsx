@@ -5,8 +5,92 @@ import SummaryCards from '@/components/Dashboard/SummaryCards';
 import MonthlyChart from '@/components/Dashboard/MonthlyChart';
 import CategoryChart from '@/components/Dashboard/CategoryChart';
 import RecentExpenses from '@/components/Dashboard/RecentExpenses';
-import { LayoutDashboard, Sparkles, Cloud } from 'lucide-react';
+import { LayoutDashboard, Sparkles, Cloud, TrendingUp, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { CATEGORY_COLORS, CATEGORY_EMOJIS } from '@/lib/categories';
+import { Expense } from '@/types/expense';
+
+function InsightsSummary({ expenses }: { expenses: Expense[] }) {
+  const now = new Date();
+  const thisMonth = expenses.filter((e) => {
+    const [y, m] = e.date.split('-').map(Number);
+    return y === now.getFullYear() && m === now.getMonth() + 1;
+  });
+  const prevMonth = expenses.filter((e) => {
+    const [y, m] = e.date.split('-').map(Number);
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return y === prev.getFullYear() && m === prev.getMonth() + 1;
+  });
+
+  const thisTotal = thisMonth.reduce((s, e) => s + e.amount, 0);
+  const prevTotal = prevMonth.reduce((s, e) => s + e.amount, 0);
+  const pct = prevTotal > 0 ? ((thisTotal - prevTotal) / prevTotal) * 100 : null;
+  const isUp = pct !== null && pct > 0;
+
+  // Top 3 categories this month
+  const catTotals: Record<string, number> = {};
+  thisMonth.forEach((e) => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
+  const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const maxCat = sorted[0]?.[1] || 1;
+
+  if (thisTotal === 0 && prevTotal === 0) return null;
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 ring-2 ring-gray-50 dark:ring-gray-700">
+      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">Tendencias</h3>
+      <div className="flex flex-col sm:flex-row gap-6">
+        {/* Month vs previous */}
+        <div className="flex items-center gap-3 min-w-max">
+          <div className={`rounded-xl p-2.5 ${isUp ? 'bg-red-50' : 'bg-emerald-50'}`}>
+            {isUp
+              ? <TrendingUp className="w-5 h-5 text-red-500" />
+              : <TrendingDown className="w-5 h-5 text-emerald-600" />
+            }
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Mes vs anterior</p>
+            {pct !== null
+              ? <p className={`text-lg font-bold ${isUp ? 'text-red-500' : 'text-emerald-600'}`}>
+                  {isUp ? '+' : ''}{pct.toFixed(0)}%
+                </p>
+              : <p className="text-lg font-bold text-gray-400">Sin datos</p>
+            }
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="hidden sm:block w-px bg-gray-100" />
+
+        {/* Top categories */}
+        {sorted.length > 0 && (
+          <div className="flex-1 space-y-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2">Top categorías este mes</p>
+            {sorted.map(([cat, amount]) => (
+              <div key={cat} className="flex items-center gap-2">
+                <span className="text-base w-5 text-center">
+                  {CATEGORY_EMOJIS[cat as keyof typeof CATEGORY_EMOJIS] ?? '📦'}
+                </span>
+                <span className="text-xs text-gray-600 dark:text-gray-300 w-24 truncate">{cat}</span>
+                <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${(amount / maxCat) * 100}%`,
+                      backgroundColor: CATEGORY_COLORS[cat as keyof typeof CATEGORY_COLORS] ?? '#6B7280',
+                    }}
+                  />
+                </div>
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 w-20 text-right">
+                  {formatCurrency(amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const { expenses, isLoaded, loadSampleData, getCurrentMonthTotal, getMonthlyAverage, openCloudHub } =
@@ -59,7 +143,7 @@ export default function DashboardPage() {
             <LayoutDashboard className="w-5 h-5 text-indigo-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
             <p className="text-sm text-gray-500 mt-0.5">
               {expenses.length} gasto{expenses.length !== 1 ? 's' : ''} registrado{expenses.length !== 1 ? 's' : ''}
               {monthTotal > 0 && (
@@ -96,6 +180,9 @@ export default function DashboardPage() {
           <CategoryChart />
         </div>
       </div>
+
+      {/* Insights */}
+      <InsightsSummary expenses={expenses} />
 
       {/* Recent expenses */}
       <RecentExpenses />

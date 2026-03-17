@@ -22,7 +22,7 @@ const BLANK: ExpenseFormData = {
   description: '',
   amount: 0,
   date: getCurrentDateString(),
-  category: 'Comida',
+  category: 'Salidas',
 };
 
 export default function ExpenseForm({ expense, onSubmit, onCancel }: ExpenseFormProps) {

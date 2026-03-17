@@ -4,12 +4,25 @@ import { ChatMessage } from '@/types/chat';
 const STORAGE_KEY = 'gastos_tracker_v1';
 const CHAT_KEY = 'gastos_chat_v1';
 
+const SUPER_KEYWORDS = [
+  'super', 'supermercado', 'mercado', 'verduleria', 'panaderia',
+  'almacen', 'kiosco', 'dia ', 'coto', 'carrefour', 'disco', 'jumbo', 'wallmart',
+];
+
+function migrateCategory(expense: Expense): Expense {
+  if ((expense.category as string) !== 'Comida') return expense;
+  const desc = expense.description.toLowerCase();
+  const isSupermarket = SUPER_KEYWORDS.some((k) => desc.includes(k));
+  return { ...expense, category: isSupermarket ? 'Supermercado' : 'Salidas' };
+}
+
 export function loadExpenses(): Expense[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as Expense[];
+    const expenses = JSON.parse(raw) as Expense[];
+    return expenses.map(migrateCategory);
   } catch {
     return [];
   }

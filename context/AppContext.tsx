@@ -50,6 +50,8 @@ export interface AppContextType {
   isCloudHubOpen: boolean;
   openCloudHub: () => void;
   closeCloudHub: () => void;
+  isDark: boolean;
+  toggleDark: () => void;
   user: User | null;
   signOut: () => Promise<void>;
   pendingImport: boolean;

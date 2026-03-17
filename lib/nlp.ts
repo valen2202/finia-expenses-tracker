@@ -4,13 +4,15 @@ import { getCurrentDateString } from './utils';
 // ─── Keyword Maps ────────────────────────────────────────────────────────────
 
 const KEYWORDS: Record<Category, string[]> = {
-  Comida: [
-    'pizza', 'comida', 'almuerzo', 'cena', 'desayuno', 'super', 'supermercado',
-    'mercado', 'restaurant', 'restau', 'mcdo', 'burger', 'delivery', 'rappi',
-    'pedidos', 'kiosco', 'heladeria', 'panaderia', 'verduleria', 'sushi',
+  Supermercado: [
+    'super', 'supermercado', 'mercado', 'verduleria', 'panaderia',
+    'almacen', 'kiosco', 'dia', 'coto', 'carrefour', 'disco', 'jumbo', 'wallmart',
+  ],
+  Salidas: [
+    'pizza', 'comida', 'almuerzo', 'cena', 'desayuno', 'restaurant', 'restau',
+    'mcdo', 'burger', 'delivery', 'rappi', 'pedidos', 'heladeria', 'sushi',
     'empanada', 'cafe', 'cafeteria', 'asado', 'parrilla', 'medialunas',
-    'sandwi', 'choripan', 'milanesa', 'facturia', 'facturas', 'dia', 'coto',
-    'carrefour', 'disco', 'jumbo', 'wallmart', 'cheto',
+    'sandwi', 'choripan', 'milanesa', 'cheto', 'facturia', 'facturas',
   ],
   Transporte: [
     'taxi', 'uber', 'nafta', 'sube', 'colectivo', 'subte', 'tren',
@@ -109,6 +111,73 @@ function extractAmount(text: string): { amount: number; raw: string } | null {
   return best;
 }
 
+// ─── Preprocessing ────────────────────────────────────────────────────────────
+
+/**
+ * "3 medialunas a $400" → returns text with "$1200" replacing the pattern
+ * Returns { text, multiplied } where multiplied = true if substitution happened
+ */
+function preprocessQuantityPrice(text: string): { text: string; multiplied: boolean } {
+  // Pattern: (number) (word) a $price  OR  (number) x $price
+  const re = /(\d+)\s+(\w+)\s+a\s+\$?\s*([\d.,]+)/i;
+  const m = text.match(re);
+  if (!m) return { text, multiplied: false };
+
+  const qty = parseInt(m[1], 10);
+  const priceRaw = m[3];
+
+  // Parse price
+  let numStr = priceRaw;
+  if (numStr.includes('.') && numStr.includes(',')) {
+    numStr = numStr.replace(/\./g, '').replace(',', '.');
+  } else if (numStr.includes('.')) {
+    const afterDot = numStr.split('.').pop()!;
+    if (afterDot.length === 3) numStr = numStr.replace(/\./g, '');
+  } else if (numStr.includes(',')) {
+    const afterComma = numStr.split(',').pop()!;
+    if (afterComma.length === 3) numStr = numStr.replace(/,/g, '');
+    else numStr = numStr.replace(',', '.');
+  }
+  const price = parseFloat(numStr);
+  if (isNaN(price) || price <= 0) return { text, multiplied: false };
+
+  const total = qty * price;
+  const replaced = text.replace(m[0], `${m[2]} $${total}`);
+  return { text: replaced, multiplied: true };
+}
+
+/**
+ * "dividí la cena de $12000 con 2 personas" → { text without division clause, splitCount: 3 }
+ * "compartí pizza $9000 entre 3" → splitCount: 3
+ */
+function preprocessSplit(text: string): { text: string; splitCount: number | null } {
+  // "con N" → split between N+1 people
+  const reCon = /(divid[ií]|compart[ií])[^$\d]*(?:\$[\d.,]+)?[^$\d]*con\s+(\d+)/i;
+  const mCon = text.match(reCon);
+  if (mCon) {
+    const n = parseInt(mCon[2], 10);
+    const cleaned = text.replace(mCon[1], '').replace(/con\s+\d+\s*\w*/i, '').trim();
+    return { text: cleaned, splitCount: n + 1 };
+  }
+
+  // "entre N" → split between N people
+  const reEntre = /(divid[ií]|compart[ií])[^$\d]*(?:\$[\d.,]+)?[^$\d]*entre\s+(\d+)/i;
+  const mEntre = text.match(reEntre);
+  if (mEntre) {
+    const n = parseInt(mEntre[2], 10);
+    const cleaned = text.replace(mEntre[1], '').replace(/entre\s+\d+\s*\w*/i, '').trim();
+    return { text: cleaned, splitCount: n };
+  }
+
+  return { text, splitCount: null };
+}
+
+// ─── Date Extraction ──────────────────────────────────────────────────────────
+
+function toDateString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function extractDate(text: string): string {
   const n = norm(text);
   const today = new Date();
@@ -116,12 +185,23 @@ function extractDate(text: string): string {
   if (n.includes('ayer')) {
     const d = new Date(today);
     d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
+    return toDateString(d);
   }
   if (n.includes('anteayer')) {
     const d = new Date(today);
     d.setDate(d.getDate() - 2);
-    return d.toISOString().split('T')[0];
+    return toDateString(d);
+  }
+  if (n.includes('semanapasada')) {
+    // Monday of last week
+    const d = new Date(today);
+    const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay(); // 1=Mon..7=Sun
+    d.setDate(d.getDate() - dayOfWeek - 6); // go to last Monday
+    return toDateString(d);
+  }
+  if (n.includes('mespasado') || n.includes('elmes')) {
+    const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    return toDateString(d);
   }
 
   const DAY_NAMES: [string, number][] = [
@@ -133,16 +213,49 @@ function extractDate(text: string): string {
       const d = new Date(today);
       const diff = ((today.getDay() - dayNum + 7) % 7) || 7;
       d.setDate(d.getDate() - diff);
-      return d.toISOString().split('T')[0];
+      return toDateString(d);
     }
   }
 
   return getCurrentDateString();
 }
 
+function extractDateRange(text: string): { dateFrom: string; dateTo: string } | null {
+  const n = norm(text);
+  const today = new Date();
+
+  if (n.includes('estasemana') || n.includes('estasem')) {
+    const d = new Date(today);
+    const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - dayOfWeek + 1);
+    return { dateFrom: toDateString(monday), dateTo: toDateString(today) };
+  }
+  if (n.includes('semanapasada')) {
+    const d = new Date(today);
+    const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+    const lastMonday = new Date(d);
+    lastMonday.setDate(d.getDate() - dayOfWeek - 6);
+    const lastSunday = new Date(lastMonday);
+    lastSunday.setDate(lastMonday.getDate() + 6);
+    return { dateFrom: toDateString(lastMonday), dateTo: toDateString(lastSunday) };
+  }
+  if (n.includes('estemes') || n.includes('estemes')) {
+    const from = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { dateFrom: toDateString(from), dateTo: toDateString(today) };
+  }
+  if (n.includes('mespasado')) {
+    const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const to = new Date(today.getFullYear(), today.getMonth(), 0);
+    return { dateFrom: toDateString(from), dateTo: toDateString(to) };
+  }
+
+  return null;
+}
+
 function buildDescription(text: string, amountRaw: string): string {
   const DATE_NOISE =
-    /\b(hoy|ayer|anteayer|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/gi;
+    /\b(hoy|ayer|anteayer|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|semana\s+pasada|esta\s+semana|el\s+mes\s+pasado)\b/gi;
   const UNIT_NOISE = /\b(pesos?|ars)\b/gi;
 
   let desc = text
@@ -169,6 +282,7 @@ export type CommandType =
   | 'expense'
   | 'query-total'
   | 'query-category'
+  | 'query-category-range'
   | 'query-summary'
   | 'delete-last'
   | 'list'
@@ -181,6 +295,10 @@ export interface ParsedCommand {
   type: CommandType;
   expense?: ParsedExpense;
   category?: Category;
+  dateFrom?: string;
+  dateTo?: string;
+  splitCount?: number;
+  splitTotal?: number;
   raw?: string;
 }
 
@@ -198,23 +316,44 @@ export function parse(input: string): ParsedCommand {
   if (includes(text, SUMMARY_WORDS)) return { type: 'query-summary' };
 
   if (includes(text, TOTAL_WORDS)) {
+    const range = extractDateRange(text);
     for (const cat of Object.keys(KEYWORDS) as Category[]) {
-      if (norm(text).includes(norm(cat))) return { type: 'query-category', category: cat };
+      if (norm(text).includes(norm(cat))) {
+        if (range) {
+          return { type: 'query-category-range', category: cat, dateFrom: range.dateFrom, dateTo: range.dateTo };
+        }
+        return { type: 'query-category', category: cat };
+      }
     }
     return { type: 'query-total' };
   }
 
+  // Preprocessing: quantity × price
+  const { text: qpText } = preprocessQuantityPrice(text);
+
+  // Preprocessing: split expense
+  const { text: processedText, splitCount } = preprocessSplit(qpText);
+
   // Try to parse as expense
-  const amountResult = extractAmount(text);
+  const amountResult = extractAmount(processedText);
   if (amountResult) {
+    let finalAmount = amountResult.amount;
+    let splitTotal: number | undefined;
+
+    if (splitCount && splitCount > 1) {
+      splitTotal = finalAmount;
+      finalAmount = Math.round(finalAmount / splitCount);
+    }
+
     return {
       type: 'expense',
       expense: {
-        amount: amountResult.amount,
-        description: buildDescription(text, amountResult.raw),
-        category: detectCategory(text),
+        amount: finalAmount,
+        description: buildDescription(processedText, amountResult.raw),
+        category: detectCategory(text), // use original text for category detection
         date: extractDate(text),
       },
+      ...(splitCount && splitCount > 1 ? { splitCount, splitTotal } : {}),
     };
   }
 

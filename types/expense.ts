@@ -1,5 +1,6 @@
 export type Category =
-  | 'Comida'
+  | 'Supermercado'
+  | 'Salidas'
   | 'Transporte'
   | 'Entretenimiento'
   | 'Compras'

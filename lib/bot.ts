@@ -52,6 +52,10 @@ export function generateBotResponse(
 
     case 'expense':
       if (addedExpense) {
+        if (command.splitCount && command.splitTotal) {
+          const base = `✅ Registré tu parte de **${addedExpense.description}**: **${formatCurrency(addedExpense.amount)}** (dividido entre ${command.splitCount}, total ${formatCurrency(command.splitTotal)}).`;
+          return showTip() ? `${base}\n\n${randomTip()}` : base;
+        }
         const idx = Math.floor(Math.random() * ADD_RESPONSES.length);
         const base = ADD_RESPONSES[idx](
           addedExpense.description,
@@ -82,6 +86,17 @@ export function generateBotResponse(
       if (catExp.length === 0)
         return `No tenés gastos registrados en **${cat}** todavía.`;
       return `📊 En **${cat}** gastaste **${formatCurrency(catTotal)}** (${catExp.length} registro${catExp.length !== 1 ? 's' : ''}).`;
+    }
+
+    case 'query-category-range': {
+      const cat = command.category!;
+      const from = command.dateFrom!;
+      const to = command.dateTo!;
+      const catExp = expenses.filter((e) => e.category === cat && e.date >= from && e.date <= to);
+      const catTotal = catExp.reduce((s, e) => s + e.amount, 0);
+      if (catExp.length === 0)
+        return `No tenés gastos en **${cat}** para ese período.`;
+      return `📊 En **${cat}** gastaste **${formatCurrency(catTotal)}** (${catExp.length} registro${catExp.length !== 1 ? 's' : ''}) del ${formatDate(from)} al ${formatDate(to)}.`;
     }
 
     case 'query-summary': {
