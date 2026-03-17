@@ -48,7 +48,7 @@ function DateSeparator({ dateStr }: { dateStr: string }) {
 
 // ─── Client-only time ─────────────────────────────────────────────────────────
 
-function ClientTime({ timestamp }: { timestamp: number }) {
+function ClientTime({ timestamp }: { timestamp: string }) {
   const [time, setTime] = useState<string | null>(null);
   useEffect(() => {
     setTime(new Date(timestamp).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
