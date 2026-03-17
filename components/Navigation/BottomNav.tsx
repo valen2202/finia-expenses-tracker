@@ -16,7 +16,7 @@ export default function BottomNav() {
   const { openCloudHub } = useAppContext();
 
   return (
-    <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="flex items-stretch h-16">
         {links.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;

@@ -33,7 +33,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 ];
 
 const ALL_CATEGORIES: Category[] = [
-  'Comida', 'Transporte', 'Entretenimiento', 'Compras', 'Facturas', 'Otro',
+  'Supermercado', 'Salidas', 'Transporte', 'Entretenimiento', 'Compras', 'Facturas', 'Otro',
 ];
 
 type ExportFormat = 'CSV' | 'JSON' | 'PDF';

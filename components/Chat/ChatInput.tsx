@@ -38,7 +38,7 @@ export default function ChatInput({ onSend, disabled }: Props) {
   };
 
   return (
-    <div className="flex items-center gap-2.5 bg-gray-50 border-2 border-gray-200 rounded-2xl px-4 py-2.5 focus-within:border-indigo-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-50 transition-all duration-200">
+    <div className="flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-2.5 focus-within:border-indigo-400 focus-within:bg-white dark:focus-within:bg-gray-800 focus-within:ring-4 focus-within:ring-indigo-50 dark:focus-within:ring-indigo-900/30 transition-all duration-200">
       <input
         ref={inputRef}
         type="text"
@@ -47,7 +47,7 @@ export default function ChatInput({ onSend, disabled }: Props) {
         onKeyDown={handleKey}
         disabled={disabled}
         placeholder={PLACEHOLDERS[phIdx]}
-        className="flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed min-w-0"
+        className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none disabled:cursor-not-allowed min-w-0"
         autoComplete="off"
         autoFocus
       />

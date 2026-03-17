@@ -49,7 +49,7 @@ export default function ChatMessage({ message }: Props) {
         <Sparkles className="w-3.5 h-3.5 text-white" />
       </div>
       <div className="flex flex-col gap-1 max-w-[80%]">
-        <div className="bg-white border border-gray-100 text-gray-800 px-4 py-2.5 rounded-2xl rounded-tl-sm text-sm leading-relaxed shadow-sm">
+        <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100 px-4 py-2.5 rounded-2xl rounded-tl-sm text-sm leading-relaxed shadow-sm">
           <RichText content={message.content} />
         </div>
         <span className="text-[11px] text-gray-400 pl-1">{time}</span>
@@ -64,7 +64,7 @@ export function TypingIndicator() {
       <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm">
         <Sparkles className="w-3.5 h-3.5 text-white" />
       </div>
-      <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
+      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
         <div className="flex items-center gap-1.5">
           {[0, 1, 2].map((i) => (
             <div

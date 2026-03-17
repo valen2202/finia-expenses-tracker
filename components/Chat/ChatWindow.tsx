@@ -20,7 +20,7 @@ export default function ChatWindow() {
   const monthTotal = getCurrentMonthTotal();
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-900 overflow-hidden md:rounded-2xl md:shadow-md md:border md:border-gray-100 dark:md:border-gray-800">
       {/* Header — gradient */}
       <div className="bg-gradient-to-r from-indigo-600 to-violet-700 px-5 py-4 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -60,7 +60,7 @@ export default function ChatWindow() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scroll-smooth bg-slate-50/70">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scroll-smooth bg-slate-50/70 dark:bg-gray-900/50">
         {messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} />
         ))}
@@ -69,10 +69,10 @@ export default function ChatWindow() {
       </div>
 
       {/* Input area */}
-      <div className="px-4 pt-3 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] bg-white border-t border-gray-100 space-y-2.5">
+      <div className="px-4 pt-3 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 space-y-2.5">
         <QuickActions onSelect={handleUserInput} disabled={isTyping} />
         <ChatInput onSend={handleUserInput} disabled={isTyping} />
-        <p className="text-center text-xs text-gray-400 pb-0.5">
+        <p className="text-center text-xs text-gray-400 dark:text-gray-600 pb-0.5">
           {expenses.length} gasto{expenses.length !== 1 ? 's' : ''} registrado
           {expenses.length !== 1 ? 's' : ''} · datos en la nube
         </p>

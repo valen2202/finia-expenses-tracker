@@ -11,9 +11,9 @@ export default function RecentExpenses() {
   const recent = expenses.slice(0, 6);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <h3 className="text-base font-semibold text-gray-900">Gastos recientes</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white">Gastos recientes</h3>
         <Link
           href="/historial"
           className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
@@ -28,17 +28,17 @@ export default function RecentExpenses() {
           <p className="text-sm text-gray-400">No hay gastos registrados</p>
         </div>
       ) : (
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-gray-50 dark:divide-gray-700">
           {recent.map((exp) => (
-            <div key={exp.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 transition-colors">
+            <div key={exp.id} className="flex items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{exp.description}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{exp.description}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge category={exp.category} showEmoji={false} />
-                  <span className="text-xs text-gray-400">{formatDate(exp.date)}</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">{formatDate(exp.date)}</span>
                 </div>
               </div>
-              <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                 {formatCurrency(exp.amount)}
               </p>
             </div>

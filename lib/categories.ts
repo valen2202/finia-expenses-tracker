@@ -1,7 +1,8 @@
 import { Category } from '@/types/expense';
 
 export const CATEGORIES: Category[] = [
-  'Comida',
+  'Supermercado',
+  'Salidas',
   'Transporte',
   'Entretenimiento',
   'Compras',
@@ -10,7 +11,8 @@ export const CATEGORIES: Category[] = [
 ];
 
 export const CATEGORY_COLORS: Record<Category, string> = {
-  Comida: '#F97316',
+  Supermercado: '#10B981',
+  Salidas: '#F97316',
   Transporte: '#3B82F6',
   Entretenimiento: '#8B5CF6',
   Compras: '#EC4899',
@@ -19,7 +21,8 @@ export const CATEGORY_COLORS: Record<Category, string> = {
 };
 
 export const CATEGORY_BADGE_CLASSES: Record<Category, string> = {
-  Comida: 'bg-orange-100 text-orange-700 border-orange-200',
+  Supermercado: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  Salidas: 'bg-orange-100 text-orange-700 border-orange-200',
   Transporte: 'bg-blue-100 text-blue-700 border-blue-200',
   Entretenimiento: 'bg-purple-100 text-purple-700 border-purple-200',
   Compras: 'bg-pink-100 text-pink-700 border-pink-200',
@@ -28,7 +31,8 @@ export const CATEGORY_BADGE_CLASSES: Record<Category, string> = {
 };
 
 export const CATEGORY_EMOJIS: Record<Category, string> = {
-  Comida: '🍽️',
+  Supermercado: '🛒',
+  Salidas: '🍽️',
   Transporte: '🚗',
   Entretenimiento: '🎬',
   Compras: '🛍️',
