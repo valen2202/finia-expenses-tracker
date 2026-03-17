@@ -40,7 +40,7 @@ function InsightsSummary({ expenses }: { expenses: Expense[] }) {
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">Tendencias</h3>
       <div className="flex flex-col sm:flex-row gap-6">
         {/* Month vs previous */}
-        <div className="flex items-center gap-3 min-w-max">
+        <div className="flex items-center gap-3">
           <div className={`rounded-xl p-2.5 ${isUp ? 'bg-red-50' : 'bg-emerald-50'}`}>
             {isUp
               ? <TrendingUp className="w-5 h-5 text-red-500" />
@@ -70,7 +70,7 @@ function InsightsSummary({ expenses }: { expenses: Expense[] }) {
                 <span className="text-base w-5 text-center">
                   {CATEGORY_EMOJIS[cat as keyof typeof CATEGORY_EMOJIS] ?? '📦'}
                 </span>
-                <span className="text-xs text-gray-600 dark:text-gray-300 w-24 truncate">{cat}</span>
+                <span className="text-xs text-gray-600 dark:text-gray-300 truncate min-w-0 flex-1">{cat}</span>
                 <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
                   <div
                     className="h-full rounded-full"
@@ -80,7 +80,7 @@ function InsightsSummary({ expenses }: { expenses: Expense[] }) {
                     }}
                   />
                 </div>
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 w-20 text-right">
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap text-right flex-shrink-0">
                   {formatCurrency(amount)}
                 </span>
               </div>

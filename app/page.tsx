@@ -8,7 +8,7 @@ export default function HomePage() {
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-5 min-h-0">
       {/* Mobile chat — nueva interfaz premium (solo < md) */}
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col md:hidden -mx-4 sm:-mx-6 relative">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col md:hidden -mx-4 sm:-mx-6 -mt-6 relative">
         <MobileChatView />
       </div>
 

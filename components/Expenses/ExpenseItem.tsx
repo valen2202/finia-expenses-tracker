@@ -13,7 +13,7 @@ interface ExpenseItemProps {
 
 export default function ExpenseItem({ expense, onEdit, onDelete }: ExpenseItemProps) {
   return (
-    <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors group">
+    <div className="flex items-center gap-3 px-3 sm:px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">{expense.description}</p>
         <div className="mt-1">
@@ -25,7 +25,7 @@ export default function ExpenseItem({ expense, onEdit, onDelete }: ExpenseItemPr
         {formatCurrency(expense.amount)}
       </p>
 
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+      <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
         <button
           onClick={() => onEdit(expense)}
           title="Editar"

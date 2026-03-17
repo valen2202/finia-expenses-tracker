@@ -55,14 +55,14 @@ export default function ExpenseList({ expenses, filter, onEdit, onDelete }: Expe
         return (
           <div key={date} className="border-b border-gray-100 last:border-0">
             {/* Encabezado de fecha */}
-            <div className="flex items-center justify-between px-5 py-2.5 bg-gray-50 border-b border-gray-100">
-              <span className="text-xs font-semibold text-gray-500 capitalize">{displayDate}</span>
-              <span className="text-xs font-semibold text-gray-500 tabular-nums">
+            <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 capitalize truncate min-w-0 mr-2">{displayDate}</span>
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap flex-shrink-0">
                 {formatCurrency(dayTotal)}
               </span>
             </div>
             {/* Gastos del día */}
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50 dark:divide-gray-700/50">
               {dayExpenses.map((exp) => (
                 <ExpenseItem key={exp.id} expense={exp} onEdit={onEdit} onDelete={onDelete} />
               ))}
