@@ -358,6 +358,12 @@ export default function MobileChatView() {
           </button>
         </div>
       </div>
+
+      {/* Spacer para el BottomNav fijo — solo en mobile (<sm) */}
+      <div
+        className="flex-shrink-0 sm:hidden bg-[#F0EBE3] dark:bg-gray-900"
+        style={{ height: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+      />
     </div>
   );
 }
